@@ -1,32 +1,58 @@
 'use client'
 
-import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from '@/components/ui/form'
+
+// Task 4: Zod schema for form validation
+const formSchema = z.object({
+    title: z.string()
+        .min(5, { message: 'Title must be at least 5 characters.' })
+        .max(100, { message: 'Title must be less than 100 characters.' }),
+    description: z.string()
+        .min(10, { message: 'Description must be at least 10 characters.' })
+        .max(1000, { message: 'Description must be less than 1000 characters.' }),
+})
+
+type FormData = z.infer<typeof formSchema>
 
 interface FeedbackFormProps {
     userId: string
 }
 
 export default function FeedbackForm({ userId }: FeedbackFormProps) {
-    const [title, setTitle] = useState('')
-    const [description, setDescription] = useState('')
-    const [loading, setLoading] = useState(false)
     const supabase = createClient()
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
+    const form = useForm<FormData>({
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+            title: '',
+            description: '',
+        },
+        mode: 'onChange', // Validate on change for immediate feedback
+    })
 
+    const { isSubmitting, isValid } = form.formState
+
+    const onSubmit = async (data: FormData) => {
         const { error } = await supabase.from('feedback').insert({
             user_id: userId,
-            title,
-            description,
+            title: data.title,
+            description: data.description,
         })
 
         if (error) {
@@ -34,42 +60,66 @@ export default function FeedbackForm({ userId }: FeedbackFormProps) {
                 description: error.message,
             })
         } else {
-            toast.success('Feedback submitted successfully')
-            setTitle('')
-            setDescription('')
+            toast.success('Feedback submitted successfully', {
+                description: 'Our AI will classify your feedback shortly.',
+            })
+            form.reset()
         }
-        setLoading(false)
     }
 
     return (
         <Card className="border-slate-200 dark:border-slate-800">
             <CardContent className="pt-6">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="title">Title</Label>
-                        <Input
-                            id="title"
-                            placeholder="Brief summary of your feedback"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            required
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <FormField
+                            control={form.control}
+                            name="title"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Title</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            placeholder="Brief summary of your feedback"
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <div className="flex justify-between">
+                                        <FormMessage />
+                                        <span className="text-xs text-slate-400">
+                                            {field.value.length}/100
+                                        </span>
+                                    </div>
+                                </FormItem>
+                            )}
                         />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
-                        <Textarea
-                            id="description"
-                            placeholder="Describe your feedback in detail..."
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            rows={4}
-                            required
+                        <FormField
+                            control={form.control}
+                            name="description"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Description</FormLabel>
+                                    <FormControl>
+                                        <Textarea
+                                            placeholder="Describe your feedback in detail..."
+                                            rows={4}
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <div className="flex justify-between">
+                                        <FormMessage />
+                                        <span className="text-xs text-slate-400">
+                                            {field.value.length}/1000
+                                        </span>
+                                    </div>
+                                </FormItem>
+                            )}
                         />
-                    </div>
-                    <Button type="submit" disabled={loading}>
-                        {loading ? 'Submitting...' : 'Submit Feedback'}
-                    </Button>
-                </form>
+                        <Button type="submit" disabled={isSubmitting || !isValid}>
+                            {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                        </Button>
+                    </form>
+                </Form>
             </CardContent>
         </Card>
     )
