@@ -5,6 +5,7 @@ import FeedbackList from '@/components/feedback/FeedbackList'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { FeedbackProvider } from '@/context/FeedbackContext'
+import { ThemeToggle } from '@/components/theme-toggle'
 import type { Feedback } from '@/types/database'
 
 async function signOut() {
@@ -40,25 +41,32 @@ export default async function DashboardPage() {
                             </h1>
                         </div>
                         <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-3">
-                                <span className="text-sm text-slate-500 dark:text-slate-400 hidden md:inline">
-                                    {user.email}
-                                </span>
-                                <Avatar className="h-8 w-8">
-                                    <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-xs shadow-inner">
-                                        {user.email?.substring(0, 2).toUpperCase()}
-                                    </AvatarFallback>
-                                </Avatar>
+                            <ThemeToggle />
+                            
+                            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+                            
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-3">
+                                    <Avatar className="h-8 w-8 order-first">
+                                        <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-xs shadow-inner font-medium text-slate-600 dark:text-slate-300">
+                                            {user.email?.substring(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden md:inline">
+                                        {user.email}
+                                    </span>
+                                </div>
+                                <form action={signOut}>
+                                    <Button
+                                        type="submit"
+                                        variant="default"
+                                        size="sm"
+                                        className="h-8"
+                                    >
+                                        Sign Out
+                                    </Button>
+                                </form>
                             </div>
-                            <form action={signOut}>
-                                <Button
-                                    type="submit"
-                                    variant="outline"
-                                    size="sm"
-                                >
-                                    Sign Out
-                                </Button>
-                            </form>
                         </div>
                     </div>
                 </div>
@@ -67,7 +75,6 @@ export default async function DashboardPage() {
             <FeedbackProvider initialFeedback={(feedback as Feedback[]) || []}>
                 <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
                     <div className="flex flex-col lg:grid lg:grid-cols-12 lg:gap-8 items-start">
-                        {/* Form Section - Sticky on Desktop */}
                         <section className="w-full lg:col-span-4 lg:sticky lg:top-8 order-1 mb-8 lg:mb-0">
                             <h2 className="text-lg font-medium text-slate-900 dark:text-white mb-4">
                                 Submit Feedback
@@ -75,7 +82,6 @@ export default async function DashboardPage() {
                             <FeedbackForm userId={user.id} />
                         </section>
 
-                        {/* List Section - Scrollable */}
                         <section className="w-full lg:col-span-8 order-2">
                             <h2 className="text-lg font-medium text-slate-900 dark:text-white mb-4">
                                 Your Feedback History
@@ -88,3 +94,4 @@ export default async function DashboardPage() {
         </div>
     )
 }
+
