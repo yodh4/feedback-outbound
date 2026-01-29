@@ -30,9 +30,18 @@ export function FeedbackProvider({ children, initialFeedback }: FeedbackProvider
     }, [])
 
     const replaceOptimisticFeedback = useCallback((tempId: string, realItem: Feedback) => {
-        setFeedback((prev) =>
-            prev.map((item) => (item.id === tempId ? realItem : item))
-        )
+        setFeedback((prev) => {
+            // check if realItem.id already exists (Realtime already added the real item)
+            const realItemExists = prev.some((item) => item.id === realItem.id)
+
+            if (realItemExists) {
+                // Realtime already added the real item, remove the temp one
+                return prev.filter((item) => item.id !== tempId)
+            }
+
+            // Normal case: replace temp with real
+            return prev.map((item) => (item.id === tempId ? realItem : item))
+        })
     }, [])
 
     return (
