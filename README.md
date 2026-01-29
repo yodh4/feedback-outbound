@@ -15,17 +15,37 @@ This project demonstrates a complete integration between a modern frontend, a Ba
 
 ## Demo
 
+> **Note:** This video showcases an earlier version of the interface. It is included to demonstrate the application's **Real-time capabilities** and **Row Level Security (RLS)**, which remain the core foundational logic.
+
 [![Watch Real-time Demo](https://img.youtube.com/vi/nub5e3UuJOs/0.jpg)](https://youtu.be/nub5e3UuJOs)
 
 ## Features
 
-*   **Authentication:** Secure Email/Password login flows protected by Middleware.
-*   **Real-time Dashboard:** Live updates for feedback status using Supabase Realtime (WebSocket).
-*   **Automated Classification:** Backend workflows analyze description text to assign Priority (High/Low) and Category (Bug/General).
-*   **Optimistic UI:** Instant visual feedback on submission without waiting for server confirmation, replacing temporary data with server responses seamlessly.
-*   **Robust Error Handling:** Fail-safe n8n workflows with fallback mechanisms for AI service failures and database errors.
-*   **Row Level Security (RLS):** Strict database policies ensuring users access only their own data.
-*   **Responsive UI:** Clean interface built with shadcn/ui components.
+*   **Secure Authentication:** Full Email/Password login flows protected by Next.js Middleware and Supabase Auth.
+*   **Real-time Dashboard:** Live updates for feedback status using Supabase Realtime (WebSocket)—watch your feedback get processed instantly.
+*   **Automated Classification:** Backend n8n workflows analyze description text to automatically assign **Priority** (High/Low) and **Category** (Bug/General) using LLMs.
+*   **Dark Mode Support:** Fully integrated system-aware theme switching with a manual toggle.
+*   **Advanced Filtering & Search:** Client-side filtering by multiple criteria (Status, Priority, Category) and instant text search.
+*   **Optimistic UI:** Instant feedback on submission (showing "Pending" state) without waiting for server confirmation.
+*   **Modern Responsive Layout:** Smart split-view dashboard (Sticky sidebar on desktop) and optimized mobile experience.
+*   **Pagination:** Client-side pagination to efficiently handle and navigate large lists of feedback.
+*   **Manual Retry Mechanism:** Ability to manually re-trigger classification for individual items if the automation service is temporarily unavailable.
+
+## Project Structure
+
+```
+├── src/
+│   ├── app/             # Next.js App Router pages (Dashboard, Login, API)
+│   ├── components/      # React components
+│   │   ├── feedback/    # Feature-specific components (Forms, Lists)
+│   │   └── ui/          # Reusable shadcn/ui components
+│   ├── context/         # React Context (Global State)
+│   ├── hooks/           # Custom React Hooks
+│   ├── lib/             # Utility functions and Supabase client
+│   └── types/           # TypeScript definitions
+├── supabase/            # Database initialization SQL
+└── workflows/           # n8n automation workflow JSON
+```
 
 ## Prerequisites
 
@@ -163,7 +183,8 @@ The workflow follows a robust multi-path logic to handle various scenarios:
 
 ### 1. Happy Path (AI Classification)
 *   **Trigger:** Listens for `INSERT` events on the `feedback` table via Supabase Webhook.
-*   **Analysis:** Sends the feedback description to **Groq (Llama-3.3-70b)**. The system prompt instructs the AI to detect urgent keywords (e.g., "error", "crash", "broken").
+*   **Analysis:** Sends the feedback description to **Groq (Llama-3.3-70b)**. The system prompt instructs the AI to detect specific keywords (`error`, `broken`, `crash`, `urgent`, `fail`) to determine urgency.
+*   **Resilience:** The AI request node is configured to **retry 3 times** on failure (e.g., rate limits or timeouts) before falling back.
 *   **Output:** The LLM returns a structured JSON object: `{ "category": "Bug"|"General", "priority": "High"|"Low" }`.
 *   **Update:** Updates the record in Supabase with the AI-determined tags and sets status to `Processed`.
 
