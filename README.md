@@ -2,6 +2,8 @@
 
 A Customer Feedback Portal built with Next.js, Supabase, and n8n. Users can submit feedback that gets automatically classified and prioritized using an automated backend workflow.
 
+**🚀 Live Deployment:** [https://feedback-outbound.vercel.app/](https://feedback-outbound.vercel.app/)
+
 ## Application Overview
 
 This project demonstrates a complete integration between a modern frontend, a Backend-as-a-Service (BaaS) provider, and an automation platform.
