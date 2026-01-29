@@ -203,10 +203,10 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                         size="sm"
                         onClick={() => handleRetry(feedbackId)}
                         disabled={isRetrying}
-                        className="h-6 px-2 text-xs"
+                        className="text-xs"
                     >
                         <RefreshCw className={`h-3 w-3 mr-1 ${isRetrying ? 'animate-spin' : ''}`} />
-                        {isRetrying ? 'Retrying...' : 'Retry'}
+                        {isRetrying ? 'Retrying' : 'Retry'}
                     </Button>
                 </div>
             )
@@ -218,7 +218,7 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                         variant="secondary"
                         className={`border-0 cursor-help ${isOptimistic
                             ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 animate-pulse'
-                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
                             }`}
                     >
                         {isOptimistic ? 'Sending...' : 'Pending'}
@@ -274,13 +274,18 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
 
     if (feedback.length === 0) {
         return (
-            <Card className="border-dashed border-slate-300 dark:border-slate-700">
+            <Card className="border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
                 <CardContent className="flex flex-col items-center justify-center py-12">
                     <MessageSquareDashed className="h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" />
                     <p className="text-lg font-medium text-slate-900 dark:text-white">No feedback yet</p>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm text-center mt-1">
-                        Your submission history will appear here once you send your first feedback.
+                    <p className="text-slate-500 dark:text-slate-400 text-sm text-center max-w-sm mt-1 mb-6">
+                        Your submission history will appear here. Help us improve by sharing your first feedback!
                     </p>
+                    <Button 
+                        onClick={() => document.querySelector<HTMLInputElement>('input[name="title"]')?.focus()}
+                    >
+                        Create Feedback
+                    </Button>
                 </CardContent>
             </Card>
         )
