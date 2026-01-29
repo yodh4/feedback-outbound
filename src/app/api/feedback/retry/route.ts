@@ -4,6 +4,14 @@ import type { Database } from '@/types/database'
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL
 
+function log(level: 'info' | 'warn' | 'error', action: string, data?: Record<string, unknown>) {
+    const entry = { timestamp: new Date().toISOString(), level, action, ...data }
+    const formatted = JSON.stringify(entry)
+    if (level === 'error') console.error('[FeedbackPortal]', formatted)
+    else if (level === 'warn') console.warn('[FeedbackPortal]', formatted)
+    else console.log('[FeedbackPortal]', formatted)
+}
+
 export async function POST(request: NextRequest) {
     try {
         const { feedbackId } = await request.json()
@@ -14,6 +22,8 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             )
         }
+
+        log('info', 'feedback_retry_start', { feedbackId })
 
         const supabase = createClient<Database>(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,6 +37,7 @@ export async function POST(request: NextRequest) {
             .single()
 
         if (fetchError || !feedback) {
+            log('warn', 'feedback_retry_error', { feedbackId, error: 'Feedback not found' })
             return NextResponse.json(
                 { error: 'Feedback not found' },
                 { status: 404 }
@@ -34,6 +45,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (feedback.status !== 'Error') {
+            log('warn', 'feedback_retry_error', { feedbackId, error: 'Invalid status', status: feedback.status })
             return NextResponse.json(
                 { error: 'Only feedback with Error status can be retried' },
                 { status: 400 }
@@ -46,6 +58,7 @@ export async function POST(request: NextRequest) {
             .eq('id', feedbackId)
 
         if (updateError) {
+            log('error', 'feedback_retry_error', { feedbackId, error: updateError.message })
             return NextResponse.json(
                 { error: 'Failed to update status' },
                 { status: 500 }
@@ -53,7 +66,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (!N8N_WEBHOOK_URL) {
-            console.error('N8N_WEBHOOK_URL is not configured')
+            log('error', 'webhook_error', { error: 'N8N_WEBHOOK_URL not configured' })
             return NextResponse.json(
                 { error: 'Webhook URL not configured' },
                 { status: 500 }
@@ -72,7 +85,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        console.log('Calling n8n webhook with payload:', JSON.stringify(webhookPayload, null, 2))
+        log('info', 'webhook_call', { feedbackId, webhookUrl: N8N_WEBHOOK_URL })
 
         const webhookResponse = await fetch(N8N_WEBHOOK_URL, {
             method: 'POST',
@@ -81,14 +94,15 @@ export async function POST(request: NextRequest) {
         })
 
         if (!webhookResponse.ok) {
-            console.error('Webhook call failed:', webhookResponse.status, await webhookResponse.text())
+            log('error', 'webhook_error', { feedbackId, status: webhookResponse.status })
         } else {
-            console.log('Webhook call successful')
+            log('info', 'webhook_success', { feedbackId })
         }
 
+        log('info', 'feedback_retry_success', { feedbackId })
         return NextResponse.json({ success: true, message: 'Retry initiated' })
     } catch (error) {
-        console.error('Retry error:', error)
+        log('error', 'feedback_retry_error', { error: error instanceof Error ? error.message : 'Unknown error' })
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 }

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useFeedback } from '@/context/FeedbackContext'
+import { log } from '@/lib/logger'
 import type { Feedback } from '@/types/database'
 
 export const feedbackFormSchema = z.object({
@@ -51,6 +52,12 @@ export function useFeedbackForm({ userId }: UseFeedbackFormOptions) {
             created_at: new Date().toISOString(),
         }
 
+        log('info', 'feedback_submit_start', {
+            userId,
+            titleLength: data.title.length,
+            descriptionLength: data.description.length,
+        })
+
         addOptimisticFeedback(optimisticItem)
         form.reset()
 
@@ -69,12 +76,23 @@ export function useFeedbackForm({ userId }: UseFeedbackFormOptions) {
             .single()
 
         if (error) {
+            log('error', 'feedback_submit_error', {
+                userId,
+                error: error.message,
+                code: error.code,
+            })
+
             removeOptimisticFeedback(tempId)
             toast.error('Failed to submit feedback', {
                 description: error.message,
             })
             return { success: false, error }
         }
+
+        log('info', 'feedback_submit_success', {
+            userId,
+            feedbackId: inserted.id,
+        })
 
         if (inserted) {
             replaceOptimisticFeedback(tempId, inserted)

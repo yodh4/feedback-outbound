@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/tooltip'
 import { MessageSquareDashed, HelpCircle, RefreshCw, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { useFeedback } from '@/context/FeedbackContext'
+import { log } from '@/lib/logger'
 import { toast } from 'sonner'
 import type { Feedback } from '@/types/database'
 
@@ -34,15 +35,13 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
     const { feedback, setFeedback } = useFeedback()
     const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
     const [currentPage, setCurrentPage] = useState(1)
-    
-    // Advanced Filters State
+
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState('ALL')
     const [priorityFilter, setPriorityFilter] = useState('ALL')
     const [categoryFilter, setCategoryFilter] = useState('ALL')
 
     const supabase = createClient()
-
 
     useEffect(() => {
         const channel = supabase
@@ -57,18 +56,21 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                 },
                 (payload) => {
                     if (payload.eventType === 'INSERT') {
+                        log('info', 'realtime_insert', { feedbackId: payload.new.id })
                         setFeedback((prev) => {
                             const exists = prev.some((item) => item.id === payload.new.id)
                             if (exists) return prev
                             return [payload.new as Feedback, ...prev]
                         })
                     } else if (payload.eventType === 'UPDATE') {
+                        log('info', 'realtime_update', { feedbackId: payload.new.id })
                         setFeedback((prev) =>
                             prev.map((item) =>
                                 item.id === payload.new.id ? (payload.new as Feedback) : item
                             )
                         )
                     } else if (payload.eventType === 'DELETE') {
+                        log('info', 'realtime_delete', { feedbackId: payload.old.id })
                         setFeedback((prev) =>
                             prev.filter((item) => item.id !== payload.old.id)
                         )
@@ -116,33 +118,23 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
 
     const filteredFeedback = useMemo(() => {
         return feedback.filter((item) => {
-            // 1. Search Query (Title or Description)
             if (searchQuery) {
                 const query = searchQuery.toLowerCase()
                 const matchesTitle = item.title.toLowerCase().includes(query)
                 const matchesDesc = item.description?.toLowerCase().includes(query)
                 if (!matchesTitle && !matchesDesc) return false
             }
-
-            // 2. Status Filter
             if (statusFilter !== 'ALL' && item.status !== statusFilter) return false
-
-            // 3. Priority Filter
             if (priorityFilter !== 'ALL' && item.priority !== priorityFilter) return false
-
-            // 4. Category Filter
             if (categoryFilter !== 'ALL' && item.category !== categoryFilter) return false
-
             return true
         })
     }, [feedback, searchQuery, statusFilter, priorityFilter, categoryFilter])
 
-    // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1)
     }, [searchQuery, statusFilter, priorityFilter, categoryFilter])
 
-    // Pagination: page-based
     const totalItems = filteredFeedback.length
     const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE)
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -281,7 +273,7 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                     <p className="text-slate-500 dark:text-slate-400 text-sm text-center max-w-sm mt-1 mb-6">
                         Your submission history will appear here. Help us improve by sharing your first feedback!
                     </p>
-                    <Button 
+                    <Button
                         onClick={() => document.querySelector<HTMLInputElement>('input[name="title"]')?.focus()}
                     >
                         Create Feedback
