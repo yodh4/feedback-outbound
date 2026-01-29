@@ -73,16 +73,21 @@ The automation logic is defined in `workflows/feedback-classification.json`.
     *   Select **Workflows** > **Import from File**.
     *   Upload `workflows/feedback-classification.json`.
 
-2.  **Configure Credentials:**
-    The imported workflow uses placeholder variables. You must update the **HTTPS Request** nodes manually in the n8n editor:
-    *   Open the node named **Set High Priority (Bug)**.
-    *   **URL:** Replace `{{ $env.SUPABASE_URL }}` with your actual Supabase Project URL.
-    *   **Headers:**
-        *   Replace `{{ $env.SUPABASE_SERVICE_KEY }}` in the `apikey` header with your **Service Role Key**.
-        *   Replace `{{ $env.SUPABASE_SERVICE_KEY }}` in the `Authorization` header with your **Service Role Key**.
-    *   Repeat these steps for the **Set Low Priority (General)** node.
+2.  **Configure Credentials (Groq AI):**
+    *   Sign up at [Groq Cloud](https://console.groq.com) and create an API Key.
+    *   In n8n, open the **AI Classifier** node.
+    *   Under **Authentication**, create a new credential (Header Auth) or update the existing one.
+    *   **Header Name:** `Authorization`
+    *   **Value:** `Bearer YOUR_GROQ_API_KEY`
 
-3.  **Activate Webhook:**
+3.  **Configure Supabase Connection:**
+    Open the **Supabase Update** node in n8n and update the following fields manually:
+    *   **URL:** Replace `{{ $env.SUPABASE_URL }}` with your Supabase Project URL.
+    *   **Headers:**
+        *   Replace `{{ $env.SUPABASE_SERVICE_KEY }}` in `apikey` with your **Service Role Key**.
+        *   Replace `{{ $env.SUPABASE_SERVICE_KEY }}` in `Authorization` with your **Service Role Key**.
+
+4.  **Activate Webhook:**
     *   Toggle the workflow status to **Active** (Green).
     *   Double-click the **Webhook** node and copy the **Production URL**.
 
@@ -138,13 +143,12 @@ CREATE POLICY "Service role can update feedback" ON feedback
 
 This configuration ensures that users cannot access or modify others' feedback, while allowing the automation service (n8n) to categorize entries via the Service Role.
 
-## Automation Logic
+## Automation Logic (AI-Powered)
 
-The n8n workflow processes incoming data based on the following rules:
+The n8n workflow processes incoming data using an LLM (Large Language Model) for intelligent classification:
 
 1.  **Trigger:** Listens for new rows inserted into the `feedback` table via Supabase Webhook.
-2.  **Analysis:** Checks the `description` field for keywords: `urgent`, `broken`, `error`, `bug`, `crash`.
-3.  **Classification:**
-    *   **Match Found:** Sets Category to `Bug`, Priority to `High`, Status to `Processed`.
-    *   **No Match:** Sets Category to `General`, Priority to `Low`, Status to `Processed`.
-4.  **Update:** Writes the changes back to Supabase.
+2.  **AI Analysis:** Sends the feedback description to **Groq (Llama-3.3)** via API.
+3.  **Prompt Engineering:** The system prompt instructs the AI to identify issues (bugs, crashes, urgency) vs general feedback.
+4.  **Structured Output:** The AI returns a strict JSON object: `{ "category": "Bug"|"General", "priority": "High"|"Low" }`.
+5.  **Update:** The workflow parses the JSON and updates the record in Supabase with the confirmed classification.
