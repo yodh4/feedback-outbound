@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Tooltip,
@@ -11,8 +12,9 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { MessageSquareDashed, HelpCircle } from 'lucide-react'
+import { MessageSquareDashed, HelpCircle, RefreshCw } from 'lucide-react'
 import { useFeedback } from '@/context/FeedbackContext'
+import { toast } from 'sonner'
 import type { Feedback } from '@/types/database'
 
 interface FeedbackListProps {
@@ -24,6 +26,7 @@ type FilterType = 'ALL' | 'PENDING' | 'HIGH' | 'BUG'
 export default function FeedbackList({ userId }: FeedbackListProps) {
     const { feedback, setFeedback } = useFeedback()
     const [filter, setFilter] = useState<FilterType>('ALL')
+    const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
     const supabase = createClient()
 
     useEffect(() => {
@@ -64,6 +67,38 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
         }
     }, [userId, supabase, setFeedback])
 
+    const handleRetry = async (feedbackId: string) => {
+        setRetryingIds((prev) => new Set(prev).add(feedbackId))
+
+        try {
+            const response = await fetch('/api/feedback/retry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ feedbackId }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to retry')
+            }
+
+            toast.success('Retry initiated', {
+                description: 'The classification will be attempted again.',
+            })
+        } catch (error) {
+            toast.error('Retry failed', {
+                description: error instanceof Error ? error.message : 'Please try again later.',
+            })
+        } finally {
+            setRetryingIds((prev) => {
+                const next = new Set(prev)
+                next.delete(feedbackId)
+                return next
+            })
+        }
+    }
+
     const filteredFeedback = feedback.filter((item) => {
         switch (filter) {
             case 'PENDING':
@@ -84,7 +119,7 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
         bug: feedback.filter((f) => f.category === 'Bug').length,
     }
 
-    const getStatusBadge = (status: string, isOptimistic: boolean) => {
+    const getStatusBadge = (status: string, isOptimistic: boolean, feedbackId: string) => {
         if (status === 'Processed') {
             return (
                 <Tooltip>
@@ -100,20 +135,33 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
             )
         }
         if (status === 'Error') {
+            const isRetrying = retryingIds.has(feedbackId)
             return (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Badge
-                            variant="destructive"
-                            className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 cursor-help"
-                        >
-                            Error
-                        </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Something went wrong during classification. Please check back later.</p>
-                    </TooltipContent>
-                </Tooltip>
+                <div className="flex items-center gap-2">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Badge
+                                variant="destructive"
+                                className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 cursor-help"
+                            >
+                                Error
+                            </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Classification failed. Click Retry to try again.</p>
+                        </TooltipContent>
+                    </Tooltip>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRetry(feedbackId)}
+                        disabled={isRetrying}
+                        className="h-6 px-2 text-xs"
+                    >
+                        <RefreshCw className={`h-3 w-3 mr-1 ${isRetrying ? 'animate-spin' : ''}`} />
+                        {isRetrying ? 'Retrying...' : 'Retry'}
+                    </Button>
+                </div>
             )
         }
         return (
@@ -236,8 +284,8 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                                                 <h3 className="font-medium text-slate-900 dark:text-white">
                                                     {item.title}
                                                 </h3>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {getStatusBadge(item.status, isOptimistic)}
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {getStatusBadge(item.status, isOptimistic, item.id)}
                                                     {getPriorityBadge(item.priority)}
                                                     {getCategoryBadge(item.category)}
                                                 </div>

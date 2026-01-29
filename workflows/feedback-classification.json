@@ -44,7 +44,10 @@
         480
       ],
       "id": "e4cb067e-cf5c-45d0-b514-e361a11121bf",
-      "name": "Fallback Update (AI Failed)"
+      "name": "Fallback Update (AI Failed)",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -81,7 +84,10 @@
         480
       ],
       "id": "c168c63a-7143-458b-ab12-044508844e74",
-      "name": "Set Error Status"
+      "name": "Set Error Status",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -128,7 +134,10 @@
           "name": "Bearer Auth account"
         }
       },
-      "onError": "continueErrorOutput"
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -174,7 +183,10 @@
       ],
       "id": "7e838cdb-ffe9-4def-a2bc-213acd7c17f9",
       "name": "Supabase Update",
-      "onError": "continueErrorOutput"
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     }
   ],
   "pinData": {},
