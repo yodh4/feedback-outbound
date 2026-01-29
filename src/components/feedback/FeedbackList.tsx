@@ -12,17 +12,17 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { MessageSquareDashed, HelpCircle } from 'lucide-react'
+import { useFeedback } from '@/context/FeedbackContext'
 import type { Feedback } from '@/types/database'
 
 interface FeedbackListProps {
-    initialFeedback: Feedback[]
     userId: string
 }
 
 type FilterType = 'ALL' | 'PENDING' | 'HIGH' | 'BUG'
 
-export default function FeedbackList({ initialFeedback, userId }: FeedbackListProps) {
-    const [feedback, setFeedback] = useState<Feedback[]>(initialFeedback)
+export default function FeedbackList({ userId }: FeedbackListProps) {
+    const { feedback, setFeedback } = useFeedback()
     const [filter, setFilter] = useState<FilterType>('ALL')
     const supabase = createClient()
 
@@ -39,7 +39,11 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
                 },
                 (payload) => {
                     if (payload.eventType === 'INSERT') {
-                        setFeedback((prev) => [payload.new as Feedback, ...prev])
+                        setFeedback((prev) => {
+                            const exists = prev.some((item) => item.id === payload.new.id)
+                            if (exists) return prev
+                            return [payload.new as Feedback, ...prev]
+                        })
                     } else if (payload.eventType === 'UPDATE') {
                         setFeedback((prev) =>
                             prev.map((item) =>
@@ -58,9 +62,8 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [supabase, userId])
+    }, [userId, supabase, setFeedback])
 
-    // Task 3: Filter logic
     const filteredFeedback = feedback.filter((item) => {
         switch (filter) {
             case 'PENDING':
@@ -74,7 +77,6 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
         }
     })
 
-    // Count for filter badges
     const counts = {
         all: feedback.length,
         pending: feedback.filter((f) => f.status === 'Pending').length,
@@ -82,7 +84,7 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
         bug: feedback.filter((f) => f.category === 'Bug').length,
     }
 
-    const getStatusBadge = (status: string) => {
+    const getStatusBadge = (status: string, isOptimistic: boolean) => {
         if (status === 'Processed') {
             return (
                 <Tooltip>
@@ -100,12 +102,18 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
         return (
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-0 cursor-help">
-                        Pending
+                    <Badge
+                        variant="secondary"
+                        className={`border-0 cursor-help ${isOptimistic
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 animate-pulse'
+                            : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            }`}
+                    >
+                        {isOptimistic ? 'Sending...' : 'Pending'}
                     </Badge>
                 </TooltipTrigger>
                 <TooltipContent>
-                    <p>Your feedback is being processed by our AI system.</p>
+                    <p>{isOptimistic ? 'Submitting to server...' : 'Your feedback is being processed by our AI system.'}</p>
                 </TooltipContent>
             </Tooltip>
         )
@@ -119,7 +127,6 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
         return <Badge variant="outline" className={`${styles} border-0`}>{priority}</Badge>
     }
 
-    // Task 5: Category badge with tooltip
     const getCategoryBadge = (category: string | null) => {
         if (!category) return null
         const styles = category === 'Bug'
@@ -153,7 +160,6 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
         })
     }
 
-    // Task 1: Empty state with icon
     if (feedback.length === 0) {
         return (
             <Card className="border-dashed border-slate-300 dark:border-slate-700">
@@ -171,7 +177,6 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
     return (
         <TooltipProvider>
             <div className="space-y-4">
-                {/* Task 3: Filter tabs */}
                 <Tabs value={filter} onValueChange={(value) => setFilter(value as FilterType)}>
                     <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
                         <TabsTrigger value="ALL" className="text-xs sm:text-sm">
@@ -189,7 +194,6 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
                     </TabsList>
                 </Tabs>
 
-                {/* Filtered results message */}
                 {filteredFeedback.length === 0 && feedback.length > 0 && (
                     <Card className="border-slate-200 dark:border-slate-800">
                         <CardContent className="py-8 text-center">
@@ -200,31 +204,36 @@ export default function FeedbackList({ initialFeedback, userId }: FeedbackListPr
                     </Card>
                 )}
 
-                {/* Feedback list */}
                 {filteredFeedback.length > 0 && (
                     <Card className="border-slate-200 dark:border-slate-800">
                         <CardContent className="p-0">
                             <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                                {filteredFeedback.map((item) => (
-                                    <div key={item.id} className="p-4">
-                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
-                                            <h3 className="font-medium text-slate-900 dark:text-white">
-                                                {item.title}
-                                            </h3>
-                                            <div className="flex flex-wrap gap-2">
-                                                {getStatusBadge(item.status)}
-                                                {getPriorityBadge(item.priority)}
-                                                {getCategoryBadge(item.category)}
+                                {filteredFeedback.map((item) => {
+                                    const isOptimistic = item.id.startsWith('temp-')
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className={`p-4 transition-opacity ${isOptimistic ? 'opacity-70' : ''}`}
+                                        >
+                                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                                                <h3 className="font-medium text-slate-900 dark:text-white">
+                                                    {item.title}
+                                                </h3>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {getStatusBadge(item.status, isOptimistic)}
+                                                    {getPriorityBadge(item.priority)}
+                                                    {getCategoryBadge(item.category)}
+                                                </div>
                                             </div>
+                                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                                {item.description}
+                                            </p>
+                                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                                                {formatDate(item.created_at)}
+                                            </p>
                                         </div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                                            {item.description}
-                                        </p>
-                                        <p className="text-xs text-slate-400 dark:text-slate-500">
-                                            {formatDate(item.created_at)}
-                                        </p>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         </CardContent>
                     </Card>

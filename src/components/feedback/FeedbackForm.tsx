@@ -17,8 +17,9 @@ import {
     FormLabel,
     FormMessage,
 } from '@/components/ui/form'
+import { useFeedback } from '@/context/FeedbackContext'
+import type { Feedback } from '@/types/database'
 
-// Task 4: Zod schema for form validation
 const formSchema = z.object({
     title: z.string()
         .min(5, { message: 'Title must be at least 5 characters.' })
@@ -36,6 +37,7 @@ interface FeedbackFormProps {
 
 export default function FeedbackForm({ userId }: FeedbackFormProps) {
     const supabase = createClient()
+    const { addOptimisticFeedback, removeOptimisticFeedback, replaceOptimisticFeedback } = useFeedback()
 
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
@@ -43,27 +45,48 @@ export default function FeedbackForm({ userId }: FeedbackFormProps) {
             title: '',
             description: '',
         },
-        mode: 'onChange', // Validate on change for immediate feedback
+        mode: 'onChange',
     })
 
     const { isSubmitting, isValid } = form.formState
 
     const onSubmit = async (data: FormData) => {
-        const { error } = await supabase.from('feedback').insert({
+        const tempId = `temp-${Date.now()}`
+        const optimisticItem: Feedback = {
+            id: tempId,
             user_id: userId,
             title: data.title,
             description: data.description,
+            status: 'Pending',
+            category: null,
+            priority: null,
+            created_at: new Date().toISOString(),
+        }
+
+        addOptimisticFeedback(optimisticItem)
+        form.reset()
+
+        toast.success('Feedback submitted!', {
+            description: 'Our AI will classify your feedback shortly.',
         })
 
+        const { data: inserted, error } = await supabase
+            .from('feedback')
+            .insert({
+                user_id: userId,
+                title: data.title,
+                description: data.description,
+            })
+            .select()
+            .single()
+
         if (error) {
+            removeOptimisticFeedback(tempId)
             toast.error('Failed to submit feedback', {
                 description: error.message,
             })
-        } else {
-            toast.success('Feedback submitted successfully', {
-                description: 'Our AI will classify your feedback shortly.',
-            })
-            form.reset()
+        } else if (inserted) {
+            replaceOptimisticFeedback(tempId, inserted)
         }
     }
 
