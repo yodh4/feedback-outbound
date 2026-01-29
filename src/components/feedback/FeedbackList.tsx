@@ -1,18 +1,25 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Input } from '@/components/ui/input'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { MessageSquareDashed, HelpCircle, RefreshCw, ChevronDown } from 'lucide-react'
+import { MessageSquareDashed, HelpCircle, RefreshCw, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { useFeedback } from '@/context/FeedbackContext'
 import { toast } from 'sonner'
 import type { Feedback } from '@/types/database'
@@ -23,14 +30,19 @@ interface FeedbackListProps {
     userId: string
 }
 
-type FilterType = 'ALL' | 'PENDING' | 'HIGH' | 'BUG'
-
 export default function FeedbackList({ userId }: FeedbackListProps) {
     const { feedback, setFeedback } = useFeedback()
-    const [filter, setFilter] = useState<FilterType>('ALL')
     const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
-    const [displayLimit, setDisplayLimit] = useState(ITEMS_PER_PAGE)
+    const [currentPage, setCurrentPage] = useState(1)
+    
+    // Advanced Filters State
+    const [searchQuery, setSearchQuery] = useState('')
+    const [statusFilter, setStatusFilter] = useState('ALL')
+    const [priorityFilter, setPriorityFilter] = useState('ALL')
+    const [categoryFilter, setCategoryFilter] = useState('ALL')
+
     const supabase = createClient()
+
 
     useEffect(() => {
         const channel = supabase
@@ -102,33 +114,57 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
         }
     }
 
-    const filteredFeedback = feedback.filter((item) => {
-        switch (filter) {
-            case 'PENDING':
-                return item.status === 'Pending'
-            case 'HIGH':
-                return item.priority === 'High'
-            case 'BUG':
-                return item.category === 'Bug'
-            default:
-                return true
-        }
-    })
+    const filteredFeedback = useMemo(() => {
+        return feedback.filter((item) => {
+            // 1. Search Query (Title or Description)
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase()
+                const matchesTitle = item.title.toLowerCase().includes(query)
+                const matchesDesc = item.description?.toLowerCase().includes(query)
+                if (!matchesTitle && !matchesDesc) return false
+            }
 
-    const paginatedFeedback = filteredFeedback.slice(0, displayLimit)
-    const hasMore = filteredFeedback.length > displayLimit
-    const remainingCount = filteredFeedback.length - displayLimit
+            // 2. Status Filter
+            if (statusFilter !== 'ALL' && item.status !== statusFilter) return false
 
-    const loadMore = () => {
-        setDisplayLimit((prev) => prev + ITEMS_PER_PAGE)
+            // 3. Priority Filter
+            if (priorityFilter !== 'ALL' && item.priority !== priorityFilter) return false
+
+            // 4. Category Filter
+            if (categoryFilter !== 'ALL' && item.category !== categoryFilter) return false
+
+            return true
+        })
+    }, [feedback, searchQuery, statusFilter, priorityFilter, categoryFilter])
+
+    // Reset page when filters change
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchQuery, statusFilter, priorityFilter, categoryFilter])
+
+    // Pagination: page-based
+    const totalItems = filteredFeedback.length
+    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE)
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems)
+    const paginatedFeedback = filteredFeedback.slice(startIndex, endIndex)
+
+    const goToPreviousPage = () => {
+        setCurrentPage((prev) => Math.max(prev - 1, 1))
     }
 
-    const counts = {
-        all: feedback.length,
-        pending: feedback.filter((f) => f.status === 'Pending').length,
-        high: feedback.filter((f) => f.priority === 'High').length,
-        bug: feedback.filter((f) => f.category === 'Bug').length,
+    const goToNextPage = () => {
+        setCurrentPage((prev) => Math.min(prev + 1, totalPages))
     }
+
+    const clearFilters = () => {
+        setSearchQuery('')
+        setStatusFilter('ALL')
+        setPriorityFilter('ALL')
+        setCategoryFilter('ALL')
+    }
+
+    const hasActiveFilters = searchQuery !== '' || statusFilter !== 'ALL' || priorityFilter !== 'ALL' || categoryFilter !== 'ALL'
 
     const getStatusBadge = (status: string, isOptimistic: boolean, feedbackId: string) => {
         if (status === 'Processed') {
@@ -253,29 +289,80 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
     return (
         <TooltipProvider>
             <div className="space-y-4">
-                <Tabs value={filter} onValueChange={(value) => setFilter(value as FilterType)}>
-                    <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
-                        <TabsTrigger value="ALL" className="text-xs sm:text-sm">
-                            All {counts.all > 0 && <span className="ml-1 text-slate-400">({counts.all})</span>}
-                        </TabsTrigger>
-                        <TabsTrigger value="PENDING" className="text-xs sm:text-sm">
-                            Pending {counts.pending > 0 && <span className="ml-1 text-slate-400">({counts.pending})</span>}
-                        </TabsTrigger>
-                        <TabsTrigger value="HIGH" className="text-xs sm:text-sm">
-                            High Priority {counts.high > 0 && <span className="ml-1 text-slate-400">({counts.high})</span>}
-                        </TabsTrigger>
-                        <TabsTrigger value="BUG" className="text-xs sm:text-sm">
-                            Bugs {counts.bug > 0 && <span className="ml-1 text-slate-400">({counts.bug})</span>}
-                        </TabsTrigger>
-                    </TabsList>
-                </Tabs>
+                {/* Advanced Filters Toolbar */}
+                <div className="flex flex-col lg:flex-row gap-4 p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+                    {/* Search Bar */}
+                    <div className="relative flex-1">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                        <Input
+                            placeholder="Search by title or description..."
+                            className="pl-9"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
 
-                {filteredFeedback.length === 0 && feedback.length > 0 && (
+                    {/* Filter Group */}
+                    <div className="flex flex-wrap gap-2">
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-[140px]">
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Status</SelectItem>
+                                <SelectItem value="Pending">Pending</SelectItem>
+                                <SelectItem value="Processed">Processed</SelectItem>
+                                <SelectItem value="Error">Error</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                            <SelectTrigger className="w-[140px]">
+                                <SelectValue placeholder="Priority" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Priority</SelectItem>
+                                <SelectItem value="High">High</SelectItem>
+                                <SelectItem value="Low">Low</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                            <SelectTrigger className="w-[140px]">
+                                <SelectValue placeholder="Category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="ALL">All Category</SelectItem>
+                                <SelectItem value="Bug">Bug</SelectItem>
+                                <SelectItem value="General">General</SelectItem>
+                                <SelectItem value="Feature Request">Feature Request</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        {hasActiveFilters && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={clearFilters}
+                                title="Clear All Filters"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                {filteredFeedback.length === 0 && (
                     <Card className="border-slate-200 dark:border-slate-800">
-                        <CardContent className="py-8 text-center">
-                            <p className="text-slate-500 dark:text-slate-400">
-                                No {filter.toLowerCase() === 'all' ? '' : filter.toLowerCase()} feedback found.
+                        <CardContent className="py-12 flex flex-col items-center justify-center text-center">
+                            <Search className="h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" />
+                            <p className="text-lg font-medium text-slate-900 dark:text-white">No results found</p>
+                            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 mb-4">
+                                Try adjusting your search or filters to find what you're looking for.
                             </p>
+                            <Button variant="outline" onClick={clearFilters}>
+                                Clear Filters
+                            </Button>
                         </CardContent>
                     </Card>
                 )}
@@ -315,16 +402,34 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                     </Card>
                 )}
 
-                {hasMore && (
-                    <div className="flex justify-center">
-                        <Button
-                            variant="outline"
-                            onClick={loadMore}
-                            className="gap-2"
-                        >
-                            <ChevronDown className="h-4 w-4" />
-                            Load More ({remainingCount} remaining)
-                        </Button>
+                {totalItems > ITEMS_PER_PAGE && (
+                    <div className="flex items-center justify-between">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} results
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={goToPreviousPage}
+                                disabled={currentPage === 1}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                                Previous
+                            </Button>
+                            <span className="text-sm font-medium mx-2">
+                                Page {currentPage} of {totalPages}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={goToNextPage}
+                                disabled={currentPage === totalPages}
+                            >
+                                Next
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
                 )}
             </div>
