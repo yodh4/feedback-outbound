@@ -12,10 +12,12 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { MessageSquareDashed, HelpCircle, RefreshCw } from 'lucide-react'
+import { MessageSquareDashed, HelpCircle, RefreshCw, ChevronDown } from 'lucide-react'
 import { useFeedback } from '@/context/FeedbackContext'
 import { toast } from 'sonner'
 import type { Feedback } from '@/types/database'
+
+const ITEMS_PER_PAGE = 10
 
 interface FeedbackListProps {
     userId: string
@@ -27,6 +29,7 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
     const { feedback, setFeedback } = useFeedback()
     const [filter, setFilter] = useState<FilterType>('ALL')
     const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
+    const [displayLimit, setDisplayLimit] = useState(ITEMS_PER_PAGE)
     const supabase = createClient()
 
     useEffect(() => {
@@ -111,6 +114,14 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                 return true
         }
     })
+
+    const paginatedFeedback = filteredFeedback.slice(0, displayLimit)
+    const hasMore = filteredFeedback.length > displayLimit
+    const remainingCount = filteredFeedback.length - displayLimit
+
+    const loadMore = () => {
+        setDisplayLimit((prev) => prev + ITEMS_PER_PAGE)
+    }
 
     const counts = {
         all: feedback.length,
@@ -269,11 +280,11 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                     </Card>
                 )}
 
-                {filteredFeedback.length > 0 && (
+                {paginatedFeedback.length > 0 && (
                     <Card className="border-slate-200 dark:border-slate-800">
                         <CardContent className="p-0">
                             <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                                {filteredFeedback.map((item) => {
+                                {paginatedFeedback.map((item) => {
                                     const isOptimistic = item.id.startsWith('temp-')
                                     return (
                                         <div
@@ -302,6 +313,19 @@ export default function FeedbackList({ userId }: FeedbackListProps) {
                             </div>
                         </CardContent>
                     </Card>
+                )}
+
+                {hasMore && (
+                    <div className="flex justify-center">
+                        <Button
+                            variant="outline"
+                            onClick={loadMore}
+                            className="gap-2"
+                        >
+                            <ChevronDown className="h-4 w-4" />
+                            Load More ({remainingCount} remaining)
+                        </Button>
+                    </div>
                 )}
             </div>
         </TooltipProvider>
