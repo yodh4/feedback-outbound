@@ -22,6 +22,8 @@ This project demonstrates a complete integration between a modern frontend, a Ba
 *   **Authentication:** Secure Email/Password login flows protected by Middleware.
 *   **Real-time Dashboard:** Live updates for feedback status using Supabase Realtime (WebSocket).
 *   **Automated Classification:** Backend workflows analyze description text to assign Priority (High/Low) and Category (Bug/General).
+*   **Optimistic UI:** Instant visual feedback on submission without waiting for server confirmation, replacing temporary data with server responses seamlessly.
+*   **Robust Error Handling:** Fail-safe n8n workflows with fallback mechanisms for AI service failures and database errors.
 *   **Row Level Security (RLS):** Strict database policies ensuring users access only their own data.
 *   **Responsive UI:** Clean interface built with shadcn/ui components.
 
