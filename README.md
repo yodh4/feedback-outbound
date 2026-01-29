@@ -11,6 +11,10 @@ This project demonstrates a complete integration between a modern frontend, a Ba
 *   **Database & Auth:** Supabase (PostgreSQL, RLS, Auth Helpers)
 *   **Automation:** n8n (Webhook triggers, Conditional logic, HTTP Requests)
 
+## Demo
+
+[![Watch Real-time Demo](https://img.youtube.com/vi/nub5e3UuJOs/0.jpg)](https://youtu.be/nub5e3UuJOs)
+
 ## Features
 
 *   **Authentication:** Secure Email/Password login flows protected by Middleware.
@@ -121,6 +125,8 @@ To ensure data security, the following strict policies are applied to the `feedb
 | **Users can insert own feedback** | INSERT | `auth.uid() = user_id` |
 | **Service role can update feedback** | UPDATE | `auth.role() = 'service_role'` |
 
+<img src="images/rls-policies.png" width="800" alt="RLS Policies">
+
 ### RLS Policy SQL Implementation
 
 ```sql
@@ -141,14 +147,29 @@ CREATE POLICY "Service role can update feedback" ON feedback
   WITH CHECK (auth.role() = 'service_role');
 ```
 
-This configuration ensures that users cannot access or modify others' feedback, while allowing the automation service (n8n) to categorize entries via the Service Role.
+This configuration ensures that users cannot access or modify others' feedback, while allowing the automationi service (n8n) to categorize entries via the Service Role.
 
 ## Automation Logic (AI-Powered)
 
-The n8n workflow processes incoming data using an LLM (Large Language Model) for intelligent classification:
+The n8n workflow is designed to be resilient and fail-safe, processing incoming data using an LLM (Large Language Model) for intelligent classification.
 
-1.  **Trigger:** Listens for new rows inserted into the `feedback` table via Supabase Webhook.
-2.  **AI Analysis:** Sends the feedback description to **Groq (Llama-3.3)** via API.
-3.  **Prompt Engineering:** The system prompt instructs the AI to identify issues (bugs, crashes, urgency) vs general feedback.
-4.  **Structured Output:** The AI returns a strict JSON object: `{ "category": "Bug"|"General", "priority": "High"|"Low" }`.
-5.  **Update:** The workflow parses the JSON and updates the record in Supabase with the confirmed classification.
+<img src="images/n8n-workflow.png" width="800" alt="n8n Workflow">
+
+The workflow follows a robust multi-path logic to handle various scenarios:
+
+### 1. Happy Path (AI Classification)
+*   **Trigger:** Listens for `INSERT` events on the `feedback` table via Supabase Webhook.
+*   **Analysis:** Sends the feedback description to **Groq (Llama-3.3-70b)**. The system prompt instructs the AI to detect urgent keywords (e.g., "error", "crash", "broken").
+*   **Output:** The LLM returns a structured JSON object: `{ "category": "Bug"|"General", "priority": "High"|"Low" }`.
+*   **Update:** Updates the record in Supabase with the AI-determined tags and sets status to `Processed`.
+
+### 2. Fallback Mechanism (AI Service Failure)
+If the AI service is down, rate-limited, or times out:
+*   The workflow automatically catches the error.
+*   **Action:** Applies default classification values (`Category: General`, `Priority: Low`).
+*   **Result:** The user's feedback is still marked as `Processed` so it doesn't get stuck in a pending state.
+
+### 3. Error Reporting (Database Failure)
+If the primary update to Supabase fails (e.g., due to schema mismatch or constraint violations):
+*   **Action:** A secondary update node attempts to set the feedback status to `Error`.
+*   **Result:** Admins can easily filter and investigate failed submissions from the dashboard.
