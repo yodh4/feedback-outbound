@@ -1,14 +1,9 @@
 'use client'
 
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
-import { toast } from 'sonner'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import {
     Form,
     FormControl,
@@ -17,84 +12,20 @@ import {
     FormLabel,
     FormMessage,
 } from '@/components/ui/form'
-import { useFeedback } from '@/context/FeedbackContext'
-import type { Feedback } from '@/types/database'
-
-const formSchema = z.object({
-    title: z.string()
-        .min(5, { message: 'Title must be at least 5 characters.' })
-        .max(100, { message: 'Title must be less than 100 characters.' }),
-    description: z.string()
-        .min(10, { message: 'Description must be at least 10 characters.' })
-        .max(1000, { message: 'Description must be less than 1000 characters.' }),
-})
-
-type FormData = z.infer<typeof formSchema>
+import { useFeedbackForm } from '@/hooks/useFeedbackForm'
 
 interface FeedbackFormProps {
     userId: string
 }
 
 export default function FeedbackForm({ userId }: FeedbackFormProps) {
-    const supabase = createClient()
-    const { addOptimisticFeedback, removeOptimisticFeedback, replaceOptimisticFeedback } = useFeedback()
-
-    const form = useForm<FormData>({
-        resolver: zodResolver(formSchema),
-        defaultValues: {
-            title: '',
-            description: '',
-        },
-        mode: 'onChange',
-    })
-
-    const { isSubmitting, isValid } = form.formState
-
-    const onSubmit = async (data: FormData) => {
-        const tempId = `temp-${Date.now()}`
-        const optimisticItem: Feedback = {
-            id: tempId,
-            user_id: userId,
-            title: data.title,
-            description: data.description,
-            status: 'Pending',
-            category: null,
-            priority: null,
-            created_at: new Date().toISOString(),
-        }
-
-        addOptimisticFeedback(optimisticItem)
-        form.reset()
-
-        toast.success('Feedback submitted!', {
-            description: 'Our AI will classify your feedback shortly.',
-        })
-
-        const { data: inserted, error } = await supabase
-            .from('feedback')
-            .insert({
-                user_id: userId,
-                title: data.title,
-                description: data.description,
-            })
-            .select()
-            .single()
-
-        if (error) {
-            removeOptimisticFeedback(tempId)
-            toast.error('Failed to submit feedback', {
-                description: error.message,
-            })
-        } else if (inserted) {
-            replaceOptimisticFeedback(tempId, inserted)
-        }
-    }
+    const { form, isSubmitting, isValid, handleSubmit } = useFeedbackForm({ userId })
 
     return (
         <Card className="border-slate-200 dark:border-slate-800">
             <CardContent className="pt-6">
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <FormField
                             control={form.control}
                             name="title"
